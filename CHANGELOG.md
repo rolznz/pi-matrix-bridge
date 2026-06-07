@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-07
+
 ### Added
+- **Rate-limit handling.** Outbound sends and edits are routed through a single
+  serialized queue; on a Matrix `429` (`M_LIMIT_EXCEEDED`) the bridge pauses all
+  sends, waits the server-requested `retry_after`, then retries the same message
+  — so nothing is silently dropped and ordering is preserved. The first message
+  after a backoff carries a `⏳ *(delayed — rate limited)*` note, typing
+  indicators are suppressed while rate-limited, and rapid in-place edits to the
+  same message are coalesced so a backoff doesn't flush stale intermediate edits.
+  Automatic — nothing to configure.
 - **Live streaming.** Both the model's reasoning (💭) and its response stream
   into Matrix messages that are edited in place (throttled) as they grow, via the
   `message_update` event — so a remote user can read where a turn is heading and
@@ -182,6 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - First authenticated user becomes admin
 - Trusted user validation on all messages
 
-[unreleased]: https://github.com/rolznz/pi-matrix-bridge/commits/master
+[unreleased]: https://github.com/rolznz/pi-matrix-bridge/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/rolznz/pi-matrix-bridge/releases/tag/v0.5.0
 [0.4.0]: https://github.com/tintinweb/pi-messenger-bridge/releases/tag/v0.4.0
 [0.1.0]: https://github.com/tintinweb/pi-messenger-bridge/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "name": "pi-matrix-bridge",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Bridge Matrix into pi (Matrix-only fork of pi-messenger-bridge)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
