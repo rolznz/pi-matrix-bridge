@@ -73,7 +73,7 @@ export class TransportManager {
     chatId: string,
     transportType: string,
     text: string
-  ): Promise<void> {
+  ): Promise<string> {
     const transport = this.transports.get(transportType);
     if (!transport) {
       throw new Error(`Transport ${transportType} not found`);
@@ -81,7 +81,22 @@ export class TransportManager {
     if (!transport.isConnected) {
       throw new Error(`Transport ${transportType} not connected`);
     }
-    await transport.sendMessage(chatId, text);
+    return await transport.sendMessage(chatId, text);
+  }
+
+  /**
+   * Edit a previously sent message via a specific transport
+   */
+  async editMessage(
+    chatId: string,
+    transportType: string,
+    messageId: string,
+    text: string
+  ): Promise<void> {
+    const transport = this.transports.get(transportType);
+    if (transport?.isConnected) {
+      await transport.editMessage(chatId, messageId, text);
+    }
   }
 
   /**

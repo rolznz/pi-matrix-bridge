@@ -2,13 +2,23 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ChallengeAuth } from "./auth/challenge-auth.js";
 import { loadConfig, saveConfig, shouldAutoConnect } from "./config.js";
-import { extractTextFromMessage, formatToolCalls, hasToolCalls, splitMessage } from "./formatting.js";
+import { extractTextFromMessage, extractThinkingFromMessage, formatToolCall, formatToolResult, hasToolCalls, splitMessage } from "./formatting.js";
 import { acquireLock, releaseLock } from "./lock.js";
 import { TransportManager } from "./transports/manager.js";
 import { MatrixProvider } from "./transports/matrix.js";
 import type { PendingRemoteChat, TransportStatus } from "./types.js";
 import { openMainMenu } from "./ui/main-menu.js";
 import { createStatusWidget } from "./ui/status-widget.js";
+
+/** Min interval between in-place edits of a live streamed message. */
+const STREAM_EDIT_THROTTLE_MS = 900;
+
+/** Tracks one edit-in-place streamed message (thinking or response) for a turn. */
+interface StreamState {
+  msgId: string | null;
+  lastText: string;
+  lastEditAt: number;
+}
 
 /**
  * pi-matrix-bridge extension
@@ -19,6 +29,20 @@ export default function (pi: ExtensionAPI): void {
   let pendingRemoteChat: PendingRemoteChat | null = null;
   let auth: ChallengeAuth;
   let ctx: ExtensionContext;
+
+  // Live streaming state — thinking and the response each get one message that's
+  // edited in place as tokens arrive, so the user can read along and steer/stop.
+  const thinkingStream: StreamState = { msgId: null, lastText: "", lastEditAt: 0 };
+  const responseStream: StreamState = { msgId: null, lastText: "", lastEditAt: 0 };
+  let streamEditInFlight = false;
+  let turnShowThinking = false;
+  // The response message renders the streamed text plus per-tool blocks. Each
+  // block shows the call the moment the tool starts running (some take seconds),
+  // then gets its output appended when the tool finishes. Keyed by toolCallId so
+  // parallel tools pair correctly.
+  let streamedText = "";
+  let toolEntries: { id: string; text: string }[] = [];
+  let turnShowTools = false;
 
   /**
    * Update status widget
@@ -91,6 +115,68 @@ export default function (pi: ExtensionAPI): void {
     const config = loadConfig();
     config.auth = auth.exportConfig();
     saveConfig(config);
+  }
+
+  /**
+   * Send or edit-in-place a streamed message, throttling edits. The first push
+   * sends immediately; later pushes for the same stream edit the same message.
+   */
+  async function pushStream(
+    chat: PendingRemoteChat,
+    state: StreamState,
+    text: string,
+    force = false
+  ): Promise<void> {
+    if (!text || text === state.lastText) return;
+    const now = Date.now();
+    if (!force && state.msgId && now - state.lastEditAt < STREAM_EDIT_THROTTLE_MS) return;
+
+    if (!state.msgId) {
+      state.msgId = await transportManager.sendMessage(chat.chatId, chat.transport, text);
+    } else {
+      await transportManager.editMessage(chat.chatId, chat.transport, state.msgId, text);
+    }
+    state.lastText = text;
+    state.lastEditAt = now;
+  }
+
+  /**
+   * Render the response message: the streamed text plus each tool's call line
+   * (and its output once it finishes), in start order.
+   */
+  function renderResponse(): string {
+    const parts: string[] = [];
+    if (streamedText) parts.push(streamedText);
+    if (toolEntries.length) parts.push(toolEntries.map((e) => e.text).join("\n"));
+    return parts.join("\n\n");
+  }
+
+  /**
+   * Push the current response render to its message. `force` bypasses the edit
+   * throttle (used when a tool starts/finishes, so it appears immediately).
+   */
+  async function pushResponse(chat: PendingRemoteChat, force = false): Promise<void> {
+    await pushStream(chat, responseStream, renderResponse(), force);
+  }
+
+  /**
+   * Force the response message to re-render immediately, guarded against
+   * overlapping edits. Used by tool start/end events. If a render is already in
+   * flight the new state is still captured in toolEntries and shown by the next
+   * render (or turn_end), so nothing is lost.
+   */
+  async function flushResponse(): Promise<void> {
+    if (!pendingRemoteChat || streamEditInFlight) return;
+    const chat = pendingRemoteChat;
+    streamEditInFlight = true;
+    try {
+      await pushResponse(chat, true);
+      transportManager.sendTyping(chat.chatId, chat.transport).catch(() => {});
+    } catch (_err) {
+      // best-effort
+    } finally {
+      streamEditInFlight = false;
+    }
   }
 
   /**
@@ -196,6 +282,21 @@ export default function (pi: ExtensionAPI): void {
    * Handle turn start - send typing indicator
    */
   pi.on("turn_start", async (_event, _context) => {
+    // Reset per-turn streaming state and cache the toggle for the hot path
+    // (message_update fires per token — avoid a config file read each time).
+    thinkingStream.msgId = null;
+    thinkingStream.lastText = "";
+    thinkingStream.lastEditAt = 0;
+    responseStream.msgId = null;
+    responseStream.lastText = "";
+    responseStream.lastEditAt = 0;
+    streamEditInFlight = false;
+    streamedText = "";
+    toolEntries = [];
+    const cfg = loadConfig();
+    turnShowThinking = cfg.hideThinking !== true;
+    turnShowTools = cfg.hideToolCalls !== true;
+
     if (pendingRemoteChat) {
       try {
         await transportManager.sendTyping(
@@ -209,39 +310,113 @@ export default function (pi: ExtensionAPI): void {
   });
 
   /**
+   * Stream live — edit a 💭 message as the reasoning grows and a separate
+   * message as the response text grows, so the user can follow along and
+   * steer/stop a wrong turn before it commits.
+   */
+  pi.on("message_update", async (event, _context) => {
+    if (!pendingRemoteChat || streamEditInFlight) return;
+
+    const message = event.message as AssistantMessage;
+    if (!Array.isArray(message?.content)) return;
+
+    const chat = pendingRemoteChat;
+    streamEditInFlight = true;
+    try {
+      if (turnShowThinking) {
+        const thinking = extractThinkingFromMessage(message);
+        if (thinking) await pushStream(chat, thinkingStream, `💭 ${thinking}`);
+      }
+
+      streamedText = extractTextFromMessage(message).trim();
+      await pushResponse(chat);
+
+      // Keep the typing indicator alive alongside the streamed messages.
+      if (thinkingStream.msgId || responseStream.msgId) {
+        transportManager.sendTyping(chat.chatId, chat.transport).catch(() => {});
+      }
+    } catch (_err) {
+      // Streaming is best-effort — ignore transient send/edit errors.
+    } finally {
+      streamEditInFlight = false;
+    }
+  });
+
+  /**
+   * Show each tool call the moment it starts running (some tools take seconds),
+   * appended to the live response message.
+   */
+  pi.on("tool_execution_start", async (event, _context) => {
+    if (!pendingRemoteChat || !turnShowTools) return;
+
+    // Record first so it's never lost — turn_end renders from toolEntries even if
+    // the live edit below is skipped (e.g. a render is mid-flight).
+    toolEntries.push({ id: event.toolCallId, text: formatToolCall(event.toolName, event.args) });
+    await flushResponse();
+  });
+
+  /**
+   * Append each tool's output under its call line once it finishes.
+   */
+  pi.on("tool_execution_end", async (event, _context) => {
+    if (!pendingRemoteChat || !turnShowTools) return;
+
+    const entry = toolEntries.find((e) => e.id === event.toolCallId);
+    if (!entry) return;
+    const output = formatToolResult(event.result, event.isError);
+    if (output) entry.text += `\n${output}`;
+    await flushResponse();
+  });
+
+  /**
    * Handle turn end - send response back to messenger
    */
   pi.on("turn_end", async (event, _context) => {
     if (!pendingRemoteChat) return;
+    const chat = pendingRemoteChat;
 
     try {
       const message = event.message as AssistantMessage;
-      const responseText = extractTextFromMessage(message);
-      const toolCallsText = formatToolCalls(message);
       const hasPendingTools = hasToolCalls(message);
       const config = loadConfig();
 
-      const parts: string[] = [];
-      const trimmedResponse = responseText.trim();
-      if (trimmedResponse) parts.push(trimmedResponse);
-      if (toolCallsText && !config.hideToolCalls) parts.push(toolCallsText);
+      // Finalize the streamed thinking message — the last live edit may have
+      // been throttled, so push the complete reasoning once the turn ends.
+      if (!config.hideThinking && thinkingStream.msgId) {
+        const finalThinking = `💭 ${extractThinkingFromMessage(message)}`;
+        if (finalThinking !== thinkingStream.lastText) {
+          await transportManager
+            .editMessage(chat.chatId, chat.transport, thinkingStream.msgId, finalThinking)
+            .catch(() => {});
+        }
+      }
 
-      if (parts.length === 0) {
-        // Nothing to send this turn — don't touch pendingRemoteChat;
-        // a future turn_end may have the actual response text.
+      // Final response = streamed text plus the per-tool blocks (call + output)
+      // accumulated from the tool execution events this turn.
+      streamedText = extractTextFromMessage(message).trim();
+      const fullText = renderResponse();
+
+      if (!fullText) {
+        // Nothing to send this turn (e.g. pure thinking, or hidden tool calls);
+        // keep pendingRemoteChat so a future turn's response routes correctly.
         return;
       }
 
-      const fullText = parts.join("\n\n");
-
-      // Split long messages into safe chunks
-      const chunks = splitMessage(fullText, 4000);
-      for (const chunk of chunks) {
-        await transportManager.sendMessage(
-          pendingRemoteChat.chatId,
-          pendingRemoteChat.transport,
-          chunk
-        );
+      if (responseStream.msgId) {
+        // Finalize the streamed response message in place.
+        if (fullText !== responseStream.lastText) {
+          await transportManager.editMessage(
+            chat.chatId,
+            chat.transport,
+            responseStream.msgId,
+            fullText
+          );
+        }
+      } else {
+        // Nothing was streamed (e.g. a tool-only turn) — send it now, chunked.
+        for (const chunk of splitMessage(fullText, 4000)) {
+          await transportManager.sendMessage(chat.chatId, chat.transport, chunk);
+        }
       }
 
       if (!hasPendingTools) {
@@ -299,6 +474,7 @@ export default function (pi: ExtensionAPI): void {
           "                              Configure Matrix (Element X, etc)",
           "/msg-bridge widget            Toggle status widget on/off",
           "/msg-bridge toggletools       Toggle tool call visibility",
+          "/msg-bridge togglethinking    Toggle live thinking (💭) visibility",
           "",
           "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         ];
@@ -423,6 +599,15 @@ export default function (pi: ExtensionAPI): void {
         saveConfig(cfg3);
         const toolState = cfg3.hideToolCalls ? "hidden" : "shown";
         context.ui.notify(`🔧 Tool calls ${toolState} in remote messages`, "info");
+        break;
+      }
+
+      case "togglethinking": {
+        const cfg4 = loadConfig();
+        cfg4.hideThinking = !cfg4.hideThinking;
+        saveConfig(cfg4);
+        const thinkingState = cfg4.hideThinking ? "hidden" : "shown";
+        context.ui.notify(`💭 Live thinking ${thinkingState} in remote messages`, "info");
         break;
       }
       default:

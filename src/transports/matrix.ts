@@ -185,21 +185,45 @@ export class MatrixProvider implements ITransportProvider {
     console.log("[Matrix] Disconnected");
   }
 
-  async sendMessage(chatId: string, text: string): Promise<void> {
+  async sendMessage(chatId: string, text: string): Promise<string> {
     if (!this.client) {
       throw new Error("Matrix client not connected");
     }
-    if (!text?.trim()) return;
+    if (!text?.trim()) return "";
 
     const { body, formattedBody } = formatForMatrix(text);
 
-    await this.client.sendMessage(chatId, {
+    return await this.client.sendMessage(chatId, {
       msgtype: "m.text",
       body,
       ...(formattedBody && {
         format: "org.matrix.custom.html",
         formatted_body: formattedBody,
       }),
+    });
+  }
+
+  async editMessage(chatId: string, messageId: string, text: string): Promise<void> {
+    if (!this.client || !messageId || !text?.trim()) return;
+
+    const { body, formattedBody } = formatForMatrix(text);
+    const newContent = {
+      msgtype: "m.text",
+      body,
+      ...(formattedBody && {
+        format: "org.matrix.custom.html",
+        formatted_body: formattedBody,
+      }),
+    };
+
+    // m.replace edit. The top-level body carries the "* " fallback shown by
+    // clients that don't render edits; m.new_content holds the real replacement.
+    await this.client.sendEvent(chatId, "m.room.message", {
+      ...newContent,
+      body: `* ${body}`,
+      ...(formattedBody && { formatted_body: `* ${formattedBody}` }),
+      "m.new_content": newContent,
+      "m.relates_to": { rel_type: "m.replace", event_id: messageId },
     });
   }
 
@@ -281,7 +305,9 @@ export class MatrixProvider implements ITransportProvider {
         messageText,
         chatId,
         userId,
-        async (text) => await this.sendMessage(chatId, text),
+        async (text) => {
+          await this.sendMessage(chatId, text);
+        },
         this.type
       );
       if (handled) return;

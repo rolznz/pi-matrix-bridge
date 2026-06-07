@@ -37,6 +37,8 @@ export interface MsgBridgeConfig {
     channels?: Record<string, { enabled: boolean; mode: "all" | "mentions" | "trusted-only" }>;
   };
   hideToolCalls?: boolean;
+  /** Hide the model's reasoning (💭) from remote messages. Shown by default. */
+  hideThinking?: boolean;
   showWidget?: boolean;
 }
 

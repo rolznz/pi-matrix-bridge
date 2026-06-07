@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  extractThinkingFromMessage,
+  extractToolResultText,
+  formatToolCall,
   formatToolCalls,
+  formatToolResult,
   splitMessage,
   truncate,
 } from '../src/formatting';
@@ -50,6 +54,104 @@ describe('splitMessage', () => {
   it('handles text that is exactly maxLen', () => {
     const text = 'a'.repeat(50);
     expect(splitMessage(text, 50)).toEqual([text]);
+  });
+});
+
+describe('extractThinkingFromMessage', () => {
+  it('extracts thinking content', () => {
+    const msg = {
+      content: [
+        { type: 'thinking', thinking: 'let me reason' },
+        { type: 'text', text: 'the answer' },
+      ],
+    } as any;
+    expect(extractThinkingFromMessage(msg)).toBe('let me reason');
+  });
+
+  it('joins multiple thinking blocks and trims', () => {
+    const msg = {
+      content: [
+        { type: 'thinking', thinking: 'first' },
+        { type: 'thinking', thinking: 'second ' },
+      ],
+    } as any;
+    expect(extractThinkingFromMessage(msg)).toBe('first\nsecond');
+  });
+
+  it('returns empty string when there is no thinking', () => {
+    const msg = { content: [{ type: 'text', text: 'hi' }] } as any;
+    expect(extractThinkingFromMessage(msg)).toBe('');
+  });
+
+  it('ignores redacted thinking with no text', () => {
+    const msg = {
+      content: [{ type: 'thinking', thinking: '', redacted: true }],
+    } as any;
+    expect(extractThinkingFromMessage(msg)).toBe('');
+  });
+});
+
+describe('formatToolCall', () => {
+  it('formats a single tool call with args', () => {
+    expect(formatToolCall('grep', { pattern: 'hi', path: '/src' })).toBe(
+      '🔧 `grep` (pattern=hi, path=/src)'
+    );
+  });
+
+  it('formats a single tool call without args', () => {
+    expect(formatToolCall('status', {})).toBe('🔧 `status`');
+    expect(formatToolCall('status', undefined)).toBe('🔧 `status`');
+  });
+
+  it('falls back to "tool" when name is empty', () => {
+    expect(formatToolCall('', {})).toBe('🔧 `tool`');
+  });
+});
+
+describe('extractToolResultText', () => {
+  it('joins text content parts', () => {
+    const result = {
+      content: [
+        { type: 'text', text: 'line1' },
+        { type: 'image', data: '...' },
+        { type: 'text', text: 'line2' },
+      ],
+    };
+    expect(extractToolResultText(result)).toBe('line1\nline2');
+  });
+
+  it('handles a plain string result', () => {
+    expect(extractToolResultText('hello')).toBe('hello');
+  });
+
+  it('returns empty string for empty/unknown results', () => {
+    expect(extractToolResultText(null)).toBe('');
+    expect(extractToolResultText({})).toBe('');
+  });
+});
+
+describe('formatToolResult', () => {
+  it('formats output under a result marker', () => {
+    const result = { content: [{ type: 'text', text: 'done' }] };
+    expect(formatToolResult(result, false)).toBe('↳ done');
+  });
+
+  it('marks errors', () => {
+    const result = { content: [{ type: 'text', text: 'boom' }] };
+    expect(formatToolResult(result, true)).toBe('↳ ⚠️ boom');
+  });
+
+  it('returns empty for no output (non-error)', () => {
+    expect(formatToolResult({ content: [] }, false)).toBe('');
+  });
+
+  it('shows a marker for empty error output', () => {
+    expect(formatToolResult({ content: [] }, true)).toBe('↳ ⚠️ (error)');
+  });
+
+  it('truncates long output at 1500 chars', () => {
+    const result = { content: [{ type: 'text', text: 'x'.repeat(2000) }] };
+    expect(formatToolResult(result, false).length).toBeLessThanOrEqual(1500 + 2);
   });
 });
 

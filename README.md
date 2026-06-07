@@ -15,6 +15,7 @@ Remote users can interact with your pi coding agent via Element, FluffyChat, or 
 - 📊 Live status widget (toggleable)
 - 💾 Persistent config (auth state, auto-connect, widget preference)
 - 🔧 Tool call visibility for remote users
+- 💭 Live streaming — thinking and the response stream into editable messages so you can steer/stop mid-turn
 - 📝 Multi-turn conversation support
 - 🔑 Secure permissions (chmod 600 for config files, 700 for directories)
 
@@ -93,6 +94,7 @@ The user enters the code in the bot chat to become a trusted user.
 | `/msg-bridge configure matrix <homeserver-url> <access-token>` | Set Matrix credentials via CLI |
 | `/msg-bridge widget` | Toggle status widget on/off |
 | `/msg-bridge toggletools` | Toggle tool call visibility in remote messages |
+| `/msg-bridge togglethinking` | Toggle live thinking (💭) visibility |
 | `/msg-bridge help` | Show command reference |
 
 ### Admin commands (in DM with the bot)
@@ -108,6 +110,7 @@ Trusted users can DM the bot directly to manage state. Reply with `/help` for th
 | `/enable <chatId> <all\|mentions\|trusted-only>` | Enable a channel |
 | `/disable <chatId>` | Disable a channel |
 | `/toggletools` | Toggle tool call visibility in replies |
+| `/togglethinking` | Toggle live thinking (💭) visibility |
 | `/session` | Show current session info (model, context usage, status) |
 | `/shutdown` | Stop pi — under systemd this restarts into a fresh session ([see below](#headless-always-on-systemd)) |
 
@@ -116,6 +119,12 @@ Any authorized user (not just admins) can also send:
 | Message | Description |
 |---|---|
 | `stop` | Interrupt the current turn. Also accepts `/stop` or `!stop`. |
+
+## Live streaming
+
+Both the model's **thinking** (💭) and its **response** stream into messages that are edited in place (token-by-token, throttled) as they're generated — so you can read where a turn is heading and `stop` (or steer) before it commits to a wrong action. Each **tool call** (🔧) appears the moment it starts running (handy for tools that take a few seconds), and its **output** (↳, truncated) is appended when it finishes. The typing indicator stays active alongside them.
+
+Thinking is **on by default** — toggle with `/togglethinking` (DM admin) or `/msg-bridge togglethinking`, or set `"hideThinking": true` in the config. (The response always streams.)
 
 ## Configuration
 

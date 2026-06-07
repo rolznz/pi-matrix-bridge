@@ -26,8 +26,17 @@ export interface ITransportProvider {
    * Send a text message to a chat
    * @param chatId - Chat/channel identifier
    * @param text - Message content
+   * @returns the sent message's id (for later editing), or "" if not sent
    */
-  sendMessage(chatId: string, text: string): Promise<void>;
+  sendMessage(chatId: string, text: string): Promise<string>;
+
+  /**
+   * Edit a previously sent message in place (e.g. for live-streaming thinking)
+   * @param chatId - Chat/channel identifier
+   * @param messageId - Id returned by a prior sendMessage
+   * @param text - Replacement content
+   */
+  editMessage(chatId: string, messageId: string, text: string): Promise<void>;
 
   /**
    * Send typing indicator to a chat

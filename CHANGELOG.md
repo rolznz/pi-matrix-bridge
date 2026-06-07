@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+- **Live streaming.** Both the model's reasoning (💭) and its response stream
+  into Matrix messages that are edited in place (throttled) as they grow, via the
+  `message_update` event — so a remote user can read where a turn is heading and
+  `stop`/steer before it commits. Each tool call (🔧) is shown the moment it
+  starts running (via `tool_execution_start`) and its output (↳, truncated) is
+  appended when it finishes (via `tool_execution_end`), paired by tool-call id.
+  Thinking is on by default (toggle with
+  `/togglethinking` or `/msg-bridge togglethinking`, or `"hideThinking": true`);
+  the response always streams. Adds `editMessage` to the transport interface
+  (Matrix `m.replace` edits) and makes `sendMessage` return the message id.
 - **`/shutdown` admin command** (trusted users, DM only). Stops pi; under a
   systemd unit with `Restart=always` this relaunches into a fresh session.
 - **`stop` reserved word** (any authorized user) — interrupts the current turn

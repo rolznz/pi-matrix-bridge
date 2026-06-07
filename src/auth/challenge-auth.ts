@@ -283,6 +283,15 @@ export class ChallengeAuth {
         return true;
       }
 
+      case "/togglethinking": {
+        const cfg = loadConfig();
+        cfg.hideThinking = !cfg.hideThinking;
+        saveConfig(cfg);
+        const state = cfg.hideThinking ? "hidden" : "shown";
+        await sendMessage(`💭 Thinking ${state} in remote messages`);
+        return true;
+      }
+
       case "/session": {
         await sendMessage(
           this.onSessionInfo ? this.onSessionInfo() : "Session info unavailable."
@@ -410,6 +419,7 @@ _Commands accept either a \`/\` or \`!\` prefix (e.g. \`/help\` or \`!help\`)._
   Modes: \`all\`, \`mentions\`, \`trusted-only\`
 • \`/disable <chatId>\` — Disable a channel
 • \`/toggletools\` — Toggle tool call visibility in replies
+• \`/togglethinking\` — Toggle live thinking (💭) visibility
 • \`/session\` — Show current session info (model, context, status)
 • \`/shutdown\` — Stop pi (restarts into a fresh session under systemd)
 
