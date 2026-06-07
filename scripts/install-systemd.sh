@@ -18,7 +18,7 @@
 #
 # Env vars passed through to the service (only if set in your shell at install
 # time): PI_MATRIX_BRIDGE_HOMESERVER, PI_MATRIX_BRIDGE_ACCESS_TOKEN. If unset, pi reads its
-# config from ~/.pi/msg-bridge.json as usual.
+# config from ~/.pi/matrix-bridge.json as usual.
 
 set -euo pipefail
 

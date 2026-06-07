@@ -8,17 +8,17 @@ describe('lock', () => {
   const g = global as any;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'msg-bridge-lock-'));
-    delete g.__msgBridgeInstanceId;
-    delete g.__msgBridgeConnected;
-    delete g.__msgBridgeOwner;
+    tmpDir = mkdtempSync(join(tmpdir(), 'matrix-bridge-lock-'));
+    delete g.__matrixBridgeInstanceId;
+    delete g.__matrixBridgeConnected;
+    delete g.__matrixBridgeOwner;
     vi.resetModules();
   });
 
   afterEach(() => {
-    delete g.__msgBridgeConnected;
-    delete g.__msgBridgeOwner;
-    delete g.__msgBridgeInstanceId;
+    delete g.__matrixBridgeConnected;
+    delete g.__matrixBridgeOwner;
+    delete g.__matrixBridgeInstanceId;
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -33,14 +33,14 @@ describe('lock', () => {
   it('acquires lock and writes lock file', async () => {
     const { acquireLock } = await importLock(tmpDir);
     expect(acquireLock()).toBe(true);
-    expect(g.__msgBridgeConnected).toBe(true);
+    expect(g.__matrixBridgeConnected).toBe(true);
 
     // Verify lock file content
-    const lockPath = join(tmpDir, '.pi', 'msg-bridge.lock');
+    const lockPath = join(tmpDir, '.pi', 'matrix-bridge.lock');
     const content = readFileSync(lockPath, 'utf-8');
     const [pid, owner] = content.split(':');
     expect(parseInt(pid, 10)).toBe(process.pid);
-    expect(owner).toBe(g.__msgBridgeInstanceId);
+    expect(owner).toBe(g.__matrixBridgeInstanceId);
   });
 
   it('allows same instance to re-acquire (idempotent)', async () => {
@@ -54,9 +54,9 @@ describe('lock', () => {
     acquireLock();
 
     releaseLock();
-    expect(g.__msgBridgeConnected).toBe(false);
-    expect(g.__msgBridgeOwner).toBeUndefined();
-    expect(existsSync(join(tmpDir, '.pi', 'msg-bridge.lock'))).toBe(false);
+    expect(g.__matrixBridgeConnected).toBe(false);
+    expect(g.__matrixBridgeOwner).toBeUndefined();
+    expect(existsSync(join(tmpDir, '.pi', 'matrix-bridge.lock'))).toBe(false);
   });
 
   it('acquire → release → re-acquire works', async () => {
@@ -64,12 +64,12 @@ describe('lock', () => {
 
     expect(acquireLock()).toBe(true);
     releaseLock();
-    expect(g.__msgBridgeConnected).toBe(false);
+    expect(g.__matrixBridgeConnected).toBe(false);
 
     // Should be able to re-acquire after release
     expect(acquireLock()).toBe(true);
-    expect(g.__msgBridgeConnected).toBe(true);
-    expect(existsSync(join(tmpDir, '.pi', 'msg-bridge.lock'))).toBe(true);
+    expect(g.__matrixBridgeConnected).toBe(true);
+    expect(existsSync(join(tmpDir, '.pi', 'matrix-bridge.lock'))).toBe(true);
   });
 
   it('blocks a different instance in the same process (layer 1)', async () => {
@@ -78,10 +78,10 @@ describe('lock', () => {
 
     // Import a fresh module to get a different instanceId
     vi.resetModules();
-    delete g.__msgBridgeInstanceId;
+    delete g.__matrixBridgeInstanceId;
     const lock2 = await importLock(tmpDir);
 
-    // Layer 1: g.__msgBridgeConnected is true, owner doesn't match new instanceId
+    // Layer 1: g.__matrixBridgeConnected is true, owner doesn't match new instanceId
     expect(lock2.acquireLock()).toBe(false);
   });
 
@@ -89,7 +89,7 @@ describe('lock', () => {
     const piDir = join(tmpDir, '.pi');
     mkdirSync(piDir, { recursive: true });
     // Use PID 2^30 — well above any real PID on Linux/macOS
-    writeFileSync(join(piDir, 'msg-bridge.lock'), '1073741824:stale-owner');
+    writeFileSync(join(piDir, 'matrix-bridge.lock'), '1073741824:stale-owner');
 
     const { acquireLock } = await importLock(tmpDir);
     expect(acquireLock()).toBe(true);
@@ -100,7 +100,7 @@ describe('lock', () => {
     mkdirSync(piDir, { recursive: true });
     // Use current PID with a different owner — simulates another instance in
     // a different process that happens to be alive
-    writeFileSync(join(piDir, 'msg-bridge.lock'), `${process.pid}:other-instance`);
+    writeFileSync(join(piDir, 'matrix-bridge.lock'), `${process.pid}:other-instance`);
 
     // Layer 1 passes (no global flag set).
     // Layer 2: same PID, different owner → blocked.
@@ -112,14 +112,14 @@ describe('lock', () => {
     const { acquireLock, releaseLock } = await importLock(tmpDir);
     acquireLock();
 
-    const realOwner = g.__msgBridgeOwner;
-    g.__msgBridgeOwner = 'someone-else';
+    const realOwner = g.__matrixBridgeOwner;
+    g.__matrixBridgeOwner = 'someone-else';
     releaseLock();
 
     // Lock should still be held
-    g.__msgBridgeOwner = realOwner;
-    expect(g.__msgBridgeConnected).toBe(true);
-    expect(existsSync(join(tmpDir, '.pi', 'msg-bridge.lock'))).toBe(true);
+    g.__matrixBridgeOwner = realOwner;
+    expect(g.__matrixBridgeConnected).toBe(true);
+    expect(existsSync(join(tmpDir, '.pi', 'matrix-bridge.lock'))).toBe(true);
   });
 
   it('creates .pi directory if missing', async () => {

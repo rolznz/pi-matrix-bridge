@@ -1,13 +1,15 @@
-# Contributing to pi-messenger-bridge
+# Contributing to pi-matrix-bridge
 
 Thank you for your interest in contributing! 🎉
+
+This is a Matrix-only fork of [tintinweb/pi-messenger-bridge](https://github.com/tintinweb/pi-messenger-bridge).
 
 ## Development Setup
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/tintinweb/pi-messenger-bridge.git
-   cd pi-messenger-bridge
+   git clone https://github.com/rolznz/pi-matrix-bridge.git
+   cd pi-matrix-bridge
    ```
 
 2. **Install dependencies**
@@ -22,94 +24,81 @@ Thank you for your interest in contributing! 🎉
 
 4. **Test locally**
    ```bash
-   # Set up your test bot token
-   export PI_TELEGRAM_TOKEN="your-test-bot-token"
-   
+   # Matrix credentials (or configure via /matrix-bridge configure matrix ...)
+   export PI_MATRIX_BRIDGE_HOMESERVER="https://matrix.org"
+   export PI_MATRIX_BRIDGE_ACCESS_TOKEN="syt_..."
+   # Connect on startup (defaults off)
+   export PI_MATRIX_BRIDGE_AUTO_CONNECT=1
+
    # Option A: Install in pi
-   pi install /path/to/pi-messenger-bridge
+   pi install /path/to/pi-matrix-bridge
    pi
-   /msg-bridge connect
-   
+   /matrix-bridge connect
+
    # Option B: Load directly from source (faster for development)
    pi -e ./src/index.ts
-   /msg-bridge connect
+   /matrix-bridge connect
    ```
 
 ## Project Structure
 
 ```
 src/
-├── index.ts              # Main entry point (event handlers, commands)
-├── types.ts              # TypeScript interfaces
+├── index.ts                 # Entry point: event handlers, /matrix-bridge command, streaming
+├── config.ts                # Config load/save + env-var helpers
+├── formatting.ts            # Message/thinking/tool formatting helpers
+├── lock.ts                  # Single-instance connection guard
+├── types.ts                 # TypeScript interfaces
 ├── auth/
-│   └── challenge-auth.ts # Authentication system
+│   └── challenge-auth.ts     # Challenge-code auth + DM admin commands
 ├── transports/
-│   ├── interface.ts      # ITransportProvider interface
-│   ├── manager.ts        # Message routing
-│   └── telegram.ts       # Telegram implementation
+│   ├── interface.ts          # ITransportProvider interface
+│   ├── manager.ts            # Transport registry + routing
+│   ├── matrix.ts             # Matrix provider (matrix-bot-sdk)
+│   └── matrix-utils.ts       # Pure, testable Matrix helpers
 └── ui/
-    └── status-widget.ts  # Status display
+    ├── main-menu.ts          # Interactive /matrix-bridge menu
+    └── status-widget.ts      # Status widget
 ```
 
-## Adding a New Transport
-
-To add support for a new messenger (e.g., WhatsApp, Slack, Discord):
-
-1. **Create a provider** in `src/transports/<name>.ts`
-   ```typescript
-   import type { ITransportProvider } from "./interface.js";
-   import type { ChallengeAuth } from "../auth/challenge-auth.js";
-   
-   export class WhatsAppProvider implements ITransportProvider {
-     readonly type = "whatsapp";
-     // Implement all ITransportProvider methods
-   }
-   ```
-
-2. **Register in index.ts**
-   ```typescript
-   if (config.whatsapp?.token) {
-     const whatsappProvider = new WhatsAppProvider(config.whatsapp.token, auth);
-     transportManager.addTransport(whatsappProvider);
-   }
-   ```
-
-3. **Update types** if needed in `src/types.ts`
-
-4. **Update docs** in README.md and GETTING_STARTED.md
+This fork is **Matrix-only**. The `ITransportProvider` abstraction remains, but
+keeping the surface small (one transport) is a goal — please discuss in an issue
+before adding another transport.
 
 ## Code Style
 
-- Use TypeScript strict mode
-- Follow existing naming conventions
-- Add JSDoc comments for public APIs
-- Keep functions focused and testable
+- TypeScript strict mode; lint/format with Biome (`npm run lint` / `npm run lint:fix`).
+- Follow existing naming conventions and keep functions focused and testable.
+- Add JSDoc comments for public APIs.
+- Prefer named functions over inline arrow callbacks.
 
 ## Testing
 
-Currently, testing is manual. Automated tests welcome!
+Run the checks before opening a PR:
 
-Manual testing checklist:
+```bash
+npm run typecheck
+npm run lint
+npm run test
+```
+
+Pure logic lives in testable modules (`formatting.ts`, `matrix-utils.ts`,
+`config.ts`, `lock.ts`) with [vitest](https://vitest.dev) tests under `tests/`.
+Add tests alongside behavioral changes.
+
+Manual checklist for end-to-end changes:
 - [ ] Bot connects successfully
-- [ ] Challenge codes appear in terminal
-- [ ] Authentication works (correct code)
-- [ ] Authentication fails properly (wrong code, too many attempts)
-- [ ] Messages are sent and received correctly
-- [ ] Group chat mention detection works
-- [ ] Admin commands work
-- [ ] Widget displays correct status
+- [ ] Challenge codes appear in terminal and authentication works (and fails correctly)
+- [ ] Messages are sent and received; group-chat mention detection works
+- [ ] Thinking/response/tool-call streaming renders and `stop` interrupts
+- [ ] Admin commands work; widget shows correct status
 
 ## Pull Request Process
 
-1. **Fork** the repository
-2. **Create a branch** for your feature (`git checkout -b feature/amazing-feature`)
-3. **Make your changes** and commit (`git commit -m 'Add amazing feature'`)
-4. **Push** to your fork (`git push origin feature/amazing-feature`)
-5. **Open a Pull Request** with:
-   - Clear description of changes
-   - Why the change is needed
-   - Any breaking changes
-   - Testing performed
+1. **Create a branch** for your feature (`git checkout -b feature/amazing-feature`)
+2. **Make your changes** and commit (`git commit -m 'feat: amazing feature'`)
+3. **Push** and **open a Pull Request** with: a clear description, why it's needed,
+   any breaking changes, and testing performed.
 
 ## Commit Messages
 
@@ -124,33 +113,15 @@ Follow conventional commits:
 
 Examples:
 ```
-feat: add WhatsApp transport support
-fix: handle undefined username in Telegram messages
-docs: update GETTING_STARTED with group chat setup
+feat: stream tool output into the response message
+fix: clear the typing indicator on stop
+docs: document PI_MATRIX_BRIDGE_AUTO_CONNECT
 ```
 
 ## Reporting Issues
 
-When reporting bugs, include:
-
-- pi version
-- Extension version
-- Operating system
-- Steps to reproduce
-- Expected vs actual behavior
-- Error messages (if any)
-
-## Feature Requests
-
-Open an issue with:
-
-- Clear use case
-- Why it's valuable
-- Proposed implementation (if you have ideas)
-
-## Questions?
-
-Open a discussion or issue. We're here to help!
+When reporting bugs, include: pi version, extension version, OS, steps to
+reproduce, expected vs actual behavior, and any error messages.
 
 ## License
 

@@ -10,7 +10,7 @@ Remote users can interact with your pi coding agent via Element, FluffyChat, or 
 
 - 💬 Matrix support (Element X, Element Web, FluffyChat, any homeserver)
 - 🔐 Challenge-based authentication (6-digit codes)
-- 🎛️ Interactive menu (`/msg-bridge`) for setup and management
+- 🎛️ Interactive menu (`/matrix-bridge`) for setup and management
 - 🔒 Single-instance guard — prevents duplicate bot polling with sub-agents
 - 📊 Live status widget (toggleable)
 - 💾 Persistent config (auth state, auto-connect, widget preference)
@@ -57,7 +57,7 @@ Works with any Matrix homeserver — Element X, Element Web, FluffyChat, etc. Th
 > revoke it later, log that device out from your Matrix client.
 
 ```bash
-/msg-bridge configure matrix <homeserver-url> <access-token>
+/matrix-bridge configure matrix <homeserver-url> <access-token>
 ```
 
 Or set via environment variables:
@@ -73,7 +73,7 @@ Set `"encryption": false` in the `matrix` config to disable — useful for non-e
 ### 3. Connect
 
 ```bash
-/msg-bridge connect
+/matrix-bridge connect
 ```
 
 ### 4. Authenticate Users
@@ -87,15 +87,15 @@ The user enters the code in the bot chat to become a trusted user.
 
 | Command | Description |
 |---|---|
-| `/msg-bridge` | Open interactive menu (configure, connect, widget, help) |
-| `/msg-bridge status` | Show connection and user status |
-| `/msg-bridge connect` | Connect to Matrix |
-| `/msg-bridge disconnect` | Disconnect from Matrix |
-| `/msg-bridge configure matrix <homeserver-url> <access-token>` | Set Matrix credentials via CLI |
-| `/msg-bridge widget` | Toggle status widget on/off |
-| `/msg-bridge toggletools` | Toggle tool call visibility in remote messages |
-| `/msg-bridge togglethinking` | Toggle live thinking (💭) visibility |
-| `/msg-bridge help` | Show command reference |
+| `/matrix-bridge` | Open interactive menu (configure, connect, widget, help) |
+| `/matrix-bridge status` | Show connection and user status |
+| `/matrix-bridge connect` | Connect to Matrix |
+| `/matrix-bridge disconnect` | Disconnect from Matrix |
+| `/matrix-bridge configure matrix <homeserver-url> <access-token>` | Set Matrix credentials via CLI |
+| `/matrix-bridge widget` | Toggle status widget on/off |
+| `/matrix-bridge toggletools` | Toggle tool call visibility in remote messages |
+| `/matrix-bridge togglethinking` | Toggle live thinking (💭) visibility |
+| `/matrix-bridge help` | Show command reference |
 
 ### Admin commands (in DM with the bot)
 
@@ -124,11 +124,11 @@ Any authorized user (not just admins) can also send:
 
 Both the model's **thinking** (💭) and its **response** stream into messages that are edited in place (token-by-token, throttled) as they're generated — so you can read where a turn is heading and `stop` (or steer) before it commits to a wrong action. Each **tool call** (🔧) appears the moment it starts running (handy for tools that take a few seconds), and its **output** (↳, truncated) is appended when it finishes. The typing indicator stays active alongside them.
 
-Thinking is **on by default** — toggle with `/togglethinking` (DM admin) or `/msg-bridge togglethinking`, or set `"hideThinking": true` in the config. (The response always streams.)
+Thinking is **on by default** — toggle with `/togglethinking` (DM admin) or `/matrix-bridge togglethinking`, or set `"hideThinking": true` in the config. (The response always streams.)
 
 ## Configuration
 
-Config is stored at `~/.pi/msg-bridge.json` with secure permissions (chmod 600).
+Config is stored at `~/.pi/matrix-bridge.json` with secure permissions (chmod 600).
 
 Example config:
 ```json
@@ -146,17 +146,40 @@ Example config:
 
 Environment variables override file config:
 
-- `PI_MATRIX_BRIDGE_AUTO_CONNECT` — connect on startup. **Defaults to off** — set to `1` to activate the bridge. Left unset, the plugin stays dormant (no connection) and you can connect manually with `/msg-bridge connect`. See [Headless / always-on](#headless-always-on-systemd).
+- `PI_MATRIX_BRIDGE_AUTO_CONNECT` — connect on startup. **Defaults to off** — set to `1` to activate the bridge. Left unset, the plugin stays dormant (no connection) and you can connect manually with `/matrix-bridge connect`. See [Headless / always-on](#headless-always-on-systemd).
 - `PI_MATRIX_BRIDGE_HOMESERVER` — Matrix homeserver URL (e.g. `https://matrix.org`)
 - `PI_MATRIX_BRIDGE_ACCESS_TOKEN` — Matrix access token
 
 ## Security
 
-- Config file: `~/.pi/msg-bridge.json` (chmod 600 - owner read/write only)
+- Config file: `~/.pi/matrix-bridge.json` (chmod 600 - owner read/write only)
 - Config directory: `~/.pi/` (chmod 700 - owner only)
 - Environment variables take precedence over config file
 - Challenge-based authentication for all new users
 - Transport-namespaced user IDs prevent impersonation
+
+## Troubleshooting
+
+**`⚠️ Matrix setup error: M_UNKNOWN: One time key signed_curve25519:… already exists`**
+
+The bot's crypto store has drifted out of sync with the homeserver (the device's one-time keys no longer match).
+
+1. Stop `pi`
+2. Delete your old pi matrix crypto storage `rm ~/.pi/matrix-bridge-crypto ~/.pi/matrix-bridge-store.json -r`
+3. Mint a **fresh access token / device** and reconfigure with it:
+
+```bash
+curl -XPOST 'https://matrix.org/_matrix/client/v3/login' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "type": "m.login.password",
+    "identifier": { "type": "m.id.user", "user": "your_username" },
+    "password": "YOUR_ACCOUNT_PASSWORD",
+    "initial_device_display_name": "pi-matrix-bridge"
+  }'
+```
+
+Then set the new `access_token` (via `/matrix-bridge configure matrix <homeserver> <token>` or `PI_MATRIX_BRIDGE_ACCESS_TOKEN`) and reconnect. Deleting the stale crypto store (`~/.pi/matrix-bridge-crypto`) before reconnecting also clears it — the bot's device will then need re-verifying. Alternatively, set `"encryption": false` in the `matrix` config to bypass E2EE entirely (the homeserver then sees plaintext).
 
 ## Architecture
 
@@ -164,7 +187,7 @@ Uses pi's native `sendUserMessage()` and `turn_end` events for two-way communica
 No tool-loop hacks needed — this is the pi-native way.
 
 Single-instance connection guard prevents duplicate polling when sub-agents spawn
-(global flag + PID lock file at `~/.pi/msg-bridge.lock`).
+(global flag + PID lock file at `~/.pi/matrix-bridge.lock`).
 
 ## Headless / always-on (systemd)
 
@@ -172,7 +195,7 @@ Run pi as a dedicated, always-on Matrix endpoint you can talk to from your phone
 
 ### Activation
 
-The plugin **does not connect on startup unless `PI_MATRIX_BRIDGE_AUTO_CONNECT=1`**. This lets a dedicated headless instance own the bot (it sets the env var) while a desktop pi with the same plugin installed stays dormant — no connection, no status widget, no notices. The desktop can still connect on demand with `/msg-bridge connect`.
+The plugin **does not connect on startup unless `PI_MATRIX_BRIDGE_AUTO_CONNECT=1`**. This lets a dedicated headless instance own the bot (it sets the env var) while a desktop pi with the same plugin installed stays dormant — no connection, no status widget, no notices. The desktop can still connect on demand with `/matrix-bridge connect`.
 
 ### Install the service
 
@@ -182,7 +205,7 @@ The bundled installer writes a `systemd --user` unit, enables lingering (so it r
 ./scripts/install-systemd.sh
 ```
 
-Options: `--name` (unit name, default `pi-matrix-bridge`), `--workdir` (the agent's working directory — **required**; prompted if omitted), `--pi` (path to the `pi` binary), and `--uninstall`. If `PI_MATRIX_BRIDGE_HOMESERVER` / `PI_MATRIX_BRIDGE_ACCESS_TOKEN` are exported in your shell, they're baked into the unit; otherwise pi reads `~/.pi/msg-bridge.json`.
+Options: `--name` (unit name, default `pi-matrix-bridge`), `--workdir` (the agent's working directory — **required**; prompted if omitted), `--pi` (path to the `pi` binary), and `--uninstall`. If `PI_MATRIX_BRIDGE_HOMESERVER` / `PI_MATRIX_BRIDGE_ACCESS_TOKEN` are exported in your shell, they're baked into the unit; otherwise pi reads `~/.pi/matrix-bridge.json`.
 
 The generated unit sets `PI_MATRIX_BRIDGE_AUTO_CONNECT=1`, `Restart=always`, and `RestartSec=2`. Manage it with:
 

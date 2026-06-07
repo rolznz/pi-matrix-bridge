@@ -51,7 +51,7 @@ export default function (pi: ExtensionAPI): void {
     const config = loadConfig();
 
     if (config.showWidget === false) {
-      ctx.ui.setWidget("msg-bridge-status", undefined);
+      ctx.ui.setWidget("matrix-bridge-status", undefined);
       return;
     }
 
@@ -65,9 +65,9 @@ export default function (pi: ExtensionAPI): void {
 
     const widget = createStatusWidget(transports, stats.usersByTransport);
     if (widget) {
-      ctx.ui.setWidget("msg-bridge-status", [widget]);
+      ctx.ui.setWidget("matrix-bridge-status", [widget]);
     } else {
-      ctx.ui.setWidget("msg-bridge-status", undefined);
+      ctx.ui.setWidget("matrix-bridge-status", undefined);
     }
   }
 
@@ -220,7 +220,7 @@ export default function (pi: ExtensionAPI): void {
       const transports = transportManager.getAllTransports();
       if (transports.length > 0 && shouldAutoConnect()) {
         if (!acquireLock()) {
-          ctx.ui.notify("ℹ️ msg-bridge: another instance is already connected — skipping auto-connect", "info");
+          ctx.ui.notify("ℹ️ matrix-bridge: another instance is already connected — skipping auto-connect", "info");
         } else {
           try {
             await transportManager.connectAll();
@@ -441,10 +441,10 @@ export default function (pi: ExtensionAPI): void {
   });
 
   /**
-   * /msg-bridge command - show status or manage connections
+   * /matrix-bridge command - show status or manage connections
    */
-  pi.registerCommand("msg-bridge", {
-    description: "Manage remote messenger connections (help|status|connect|disconnect|configure|widget)",
+  pi.registerCommand("matrix-bridge", {
+    description: "Manage the Matrix bridge (help|status|connect|disconnect|configure|widget)",
     handler: async (args: string, context) => {
       const parts = args.trim().split(/\s+/).filter(p => p.length > 0);
       const subcommand = parts[0] || "";
@@ -463,18 +463,18 @@ export default function (pi: ExtensionAPI): void {
     switch (subcommand) {
       case "help": {
         const helpText = [
-          "━━━ Message Bridge Commands ━━━",
+          "━━━ Matrix Bridge Commands ━━━",
           "",
-          "/msg-bridge                   Open interactive menu",
-          "/msg-bridge help              Show this help",
-          "/msg-bridge status            Show connection and user status",
-          "/msg-bridge connect           Connect to Matrix",
-          "/msg-bridge disconnect        Disconnect from Matrix",
-          "/msg-bridge configure matrix <homeserver-url> <access-token>",
+          "/matrix-bridge                   Open interactive menu",
+          "/matrix-bridge help              Show this help",
+          "/matrix-bridge status            Show connection and user status",
+          "/matrix-bridge connect           Connect to Matrix",
+          "/matrix-bridge disconnect        Disconnect from Matrix",
+          "/matrix-bridge configure matrix <homeserver-url> <access-token>",
           "                              Configure Matrix (Element X, etc)",
-          "/msg-bridge widget            Toggle status widget on/off",
-          "/msg-bridge toggletools       Toggle tool call visibility",
-          "/msg-bridge togglethinking    Toggle live thinking (💭) visibility",
+          "/matrix-bridge widget            Toggle status widget on/off",
+          "/matrix-bridge toggletools       Toggle tool call visibility",
+          "/matrix-bridge togglethinking    Toggle live thinking (💭) visibility",
           "",
           "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         ];
@@ -483,7 +483,7 @@ export default function (pi: ExtensionAPI): void {
       }
       case "connect":
         if (!acquireLock()) {
-          context.ui.notify("⚠️ Another msg-bridge instance is already connected. Run /msg-bridge disconnect there first.", "warning");
+          context.ui.notify("⚠️ Another matrix-bridge instance is already connected. Run /matrix-bridge disconnect there first.", "warning");
           break;
         }
         try {
@@ -512,7 +512,7 @@ export default function (pi: ExtensionAPI): void {
         const token = parts.slice(2).join(" ");
 
         if (!platform) {
-          context.ui.notify("Usage: /msg-bridge configure <platform> [token/path]", "error");
+          context.ui.notify("Usage: /matrix-bridge configure <platform> [token/path]", "error");
           return;
         }
 
@@ -524,7 +524,7 @@ export default function (pi: ExtensionAPI): void {
             const homeserverUrl = matrixParts[0];
             const matrixAccessToken = matrixParts.slice(1).join(" ");
             if (!homeserverUrl || !matrixAccessToken) {
-              context.ui.notify("Usage: /msg-bridge configure matrix <homeserver-url> <access-token>", "error");
+              context.ui.notify("Usage: /matrix-bridge configure matrix <homeserver-url> <access-token>", "error");
               return;
             }
 
@@ -541,7 +541,7 @@ export default function (pi: ExtensionAPI): void {
                 context.ui.notify(`⚠️ Matrix setup error: ${(err as Error).message}`, "error");
               }
             } else {
-              context.ui.notify("✅ Matrix configured (another instance is connected — run /msg-bridge connect later)", "info");
+              context.ui.notify("✅ Matrix configured (another instance is connected — run /matrix-bridge connect later)", "info");
             }
             updateWidget();
             break;
@@ -567,7 +567,7 @@ export default function (pi: ExtensionAPI): void {
         const stats = auth.getStats();
         const status = transportManager.getStatus();
         const lines = [
-          "━━━ Message Bridge Status ━━━",
+          "━━━ Matrix Bridge Status ━━━",
           "",
           "Transports:",
           ...status.map(
@@ -611,7 +611,7 @@ export default function (pi: ExtensionAPI): void {
         break;
       }
       default:
-        context.ui.notify(`Unknown subcommand: ${subcommand}. Run /msg-bridge help`, "warning");
+        context.ui.notify(`Unknown subcommand: ${subcommand}. Run /matrix-bridge help`, "warning");
         break;
     }
     },

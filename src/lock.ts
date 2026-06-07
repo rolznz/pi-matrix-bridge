@@ -12,17 +12,17 @@ import * as path from "path";
  *                    launched as child processes with different PIDs).
  */
 
-const LOCK_PATH = path.join(os.homedir(), ".pi", "msg-bridge.lock");
+const LOCK_PATH = path.join(os.homedir(), ".pi", "matrix-bridge.lock");
 
 const g = global as any;
-if (!g.__msgBridgeInstanceId) {
-  g.__msgBridgeInstanceId = Math.random().toString(36).slice(2);
+if (!g.__matrixBridgeInstanceId) {
+  g.__matrixBridgeInstanceId = Math.random().toString(36).slice(2);
 }
-const instanceId: string = g.__msgBridgeInstanceId;
+const instanceId: string = g.__matrixBridgeInstanceId;
 
 export function acquireLock(): boolean {
   // Layer 1: same-process guard via a global flag
-  if (g.__msgBridgeConnected && g.__msgBridgeOwner !== instanceId) {
+  if (g.__matrixBridgeConnected && g.__matrixBridgeOwner !== instanceId) {
     return false;
   }
 
@@ -53,15 +53,15 @@ export function acquireLock(): boolean {
     // lock file mechanics failed — fall through, global flag is still set below
   }
 
-  g.__msgBridgeConnected = true;
-  g.__msgBridgeOwner = instanceId;
+  g.__matrixBridgeConnected = true;
+  g.__matrixBridgeOwner = instanceId;
   return true;
 }
 
 export function releaseLock(): void {
-  if (g.__msgBridgeOwner !== instanceId) return;
-  g.__msgBridgeConnected = false;
-  g.__msgBridgeOwner = undefined;
+  if (g.__matrixBridgeOwner !== instanceId) return;
+  g.__matrixBridgeConnected = false;
+  g.__matrixBridgeOwner = undefined;
   try {
     if (fs.existsSync(LOCK_PATH)) {
       const raw = fs.readFileSync(LOCK_PATH, "utf-8").trim().split(":");

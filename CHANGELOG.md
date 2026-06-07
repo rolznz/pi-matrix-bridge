@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
 - **Live streaming.** Both the model's reasoning (💭) and its response stream
   into Matrix messages that are edited in place (throttled) as they grow, via the
   `message_update` event — so a remote user can read where a turn is heading and
@@ -14,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts running (via `tool_execution_start`) and its output (↳, truncated) is
   appended when it finishes (via `tool_execution_end`), paired by tool-call id.
   Thinking is on by default (toggle with
-  `/togglethinking` or `/msg-bridge togglethinking`, or `"hideThinking": true`);
+  `/togglethinking` or `/matrix-bridge togglethinking`, or `"hideThinking": true`);
   the response always streams. Adds `editMessage` to the transport interface
   (Matrix `m.replace` edits) and makes `sendMessage` return the message id.
 - **`/shutdown` admin command** (trusted users, DM only). Stops pi; under a
@@ -31,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Forked and renamed to `pi-matrix-bridge`.** This is a Matrix-only fork of
   [tintinweb/pi-messenger-bridge](https://github.com/tintinweb/pi-messenger-bridge) (MIT).
+- **Renamed the `msg-bridge` identifier to `matrix-bridge`** — the command is now
+  `/matrix-bridge`, the config file is `~/.pi/matrix-bridge.json`, the lock is
+  `~/.pi/matrix-bridge.lock`, and the Matrix store/crypto dirs are
+  `~/.pi/matrix-bridge-store.json` / `~/.pi/matrix-bridge-crypto`. **Existing
+  instances must rename these files** (e.g. `mv ~/.pi/msg-bridge.json
+  ~/.pi/matrix-bridge.json`) or reconfigure; renaming the crypto dir otherwise
+  means the bot's E2EE device must be re-verified.
 - Unified all env vars under the `PI_MATRIX_BRIDGE_` prefix (e.g. the Matrix creds
   `PI_MATRIX_HOMESERVER`/`PI_MATRIX_ACCESS_TOKEN` →
   `PI_MATRIX_BRIDGE_HOMESERVER`/`PI_MATRIX_BRIDGE_ACCESS_TOKEN`).
@@ -38,8 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OFF.** The plugin doesn't connect on startup unless it's set to `1` — so a
   desktop pi with the plugin installed stays dormant (no connection, no widget,
   no notices) while a headless instance sets the var to own the bot. Connect a
-  dormant instance on demand with `/msg-bridge connect`.
-- `autoConnect` moved out of persisted config to that env var; `/msg-bridge
+  dormant instance on demand with `/matrix-bridge connect`.
+- `autoConnect` moved out of persisted config to that env var; `/matrix-bridge
   connect`/`disconnect` no longer write a persisted preference.
 - The status widget now renders only when a transport is actually connected.
 
@@ -161,6 +169,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - First authenticated user becomes admin
 - Trusted user validation on all messages
 
-[unreleased]: https://github.com/tintinweb/pi-messenger-bridge/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/rolznz/pi-matrix-bridge/commits/master
 [0.4.0]: https://github.com/tintinweb/pi-messenger-bridge/releases/tag/v0.4.0
 [0.1.0]: https://github.com/tintinweb/pi-messenger-bridge/releases/tag/v0.1.0

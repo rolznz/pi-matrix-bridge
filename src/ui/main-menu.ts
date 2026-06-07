@@ -1,5 +1,5 @@
 /**
- * main-menu.ts — Interactive main menu for /msg-bridge.
+ * main-menu.ts — Interactive main menu for /matrix-bridge.
  *
  * Shows transport status in the title, with Connect, Configure, Widget, and Help.
  */
@@ -47,11 +47,11 @@ function getStatusLine(mctx: MenuContext): string {
 function showHelp(mctx: MenuContext): void {
   mctx.ui.notify(
     "Subcommands:\n" +
-    "  /msg-bridge status                — show connection status\n" +
-    "  /msg-bridge connect               — connect all transports\n" +
-    "  /msg-bridge disconnect            — disconnect all transports\n" +
-    "  /msg-bridge configure <platform>  — set up a transport\n" +
-    "  /msg-bridge widget                — toggle status widget",
+    "  /matrix-bridge status                — show connection status\n" +
+    "  /matrix-bridge connect               — connect all transports\n" +
+    "  /matrix-bridge disconnect            — disconnect all transports\n" +
+    "  /matrix-bridge configure <platform>  — set up a transport\n" +
+    "  /matrix-bridge widget                — toggle status widget",
     "info",
   );
 }
@@ -100,7 +100,7 @@ async function doConfigure(mctx: MenuContext): Promise<void> {
       mctx.ui.notify(`⚠️ Matrix setup error: ${(err as Error).message}`, "error");
     }
   } else {
-    mctx.ui.notify("✅ Matrix configured (another instance is connected — run /msg-bridge connect later)", "info");
+    mctx.ui.notify("✅ Matrix configured (another instance is connected — run /matrix-bridge connect later)", "info");
   }
   mctx.updateWidget();
 }
@@ -119,7 +119,7 @@ function doToggleWidget(mctx: MenuContext): void {
 export async function openMainMenu(mctx: MenuContext): Promise<void> {
   const mainMenu = async (): Promise<void> => {
     const statusLine = getStatusLine(mctx);
-    const title = `Message Bridge\n${statusLine}`;
+    const title = `Matrix Bridge\n${statusLine}`;
 
     const anyConnected = mctx.transportManager.getStatus().some((s) => s.connected);
 

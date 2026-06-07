@@ -23,9 +23,9 @@ export interface ExternalMessage {
 }
 
 /**
- * Configuration for msg-bridge extension
+ * Configuration for matrix-bridge extension
  */
-export interface MsgBridgeConfig {
+export interface MatrixBridgeConfig {
   matrix?: {
     homeserverUrl: string;
     accessToken: string;

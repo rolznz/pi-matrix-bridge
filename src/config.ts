@@ -1,16 +1,16 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { MsgBridgeConfig } from "./types.js";
+import type { MatrixBridgeConfig } from "./types.js";
 
 const CONFIG_DIR = path.join(os.homedir(), ".pi");
-const CONFIG_PATH = path.join(CONFIG_DIR, "msg-bridge.json");
+const CONFIG_PATH = path.join(CONFIG_DIR, "matrix-bridge.json");
 
 /**
  * Load config from file and env vars (env vars override file).
  */
-export function loadConfig(): MsgBridgeConfig {
-  const config: MsgBridgeConfig = {};
+export function loadConfig(): MatrixBridgeConfig {
+  const config: MatrixBridgeConfig = {};
 
   if (fs.existsSync(CONFIG_PATH)) {
     try {
@@ -44,7 +44,7 @@ export function loadConfig(): MsgBridgeConfig {
  * OFF — the plugin stays dormant unless this is set to "1"/"true"/"yes". The
  * headless systemd unit sets it; a desktop pi with the plugin installed makes
  * no connection on startup (and can still connect manually with
- * /msg-bridge connect).
+ * /matrix-bridge connect).
  */
 export function shouldAutoConnect(): boolean {
   const v = process.env.PI_MATRIX_BRIDGE_AUTO_CONNECT?.trim().toLowerCase();
@@ -54,7 +54,7 @@ export function shouldAutoConnect(): boolean {
 /**
  * Save config to file with secure permissions.
  */
-export function saveConfig(config: MsgBridgeConfig): void {
+export function saveConfig(config: MatrixBridgeConfig): void {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
