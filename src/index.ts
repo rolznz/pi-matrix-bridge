@@ -232,7 +232,6 @@ export default function (pi: ExtensionAPI): void {
         }
       }
     })().catch(err => {
-      console.error("Transport initialization error:", err);
       ctx.ui.notify(`❌ Transport initialization failed: ${err.message}`, "error");
     });
 

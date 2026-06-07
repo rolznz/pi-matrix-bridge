@@ -51,6 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connect`/`disconnect` no longer write a persisted preference.
 - The status widget now renders only when a transport is actually connected.
 
+### Fixed
+- **Remove Matrix-Bot-SDK logs.** matrix-bot-sdk logs to
+  the console (`[INFO] [CryptoClient] …` etc.), which wrote over pi's interactive
+  render — the crypto logs emitted while decrypting a message landed exactly where
+  that message's bubble should appear, so it never showed. The SDK logger is now
+  silenced, and the bridge's own `console.*` status lines (connect/disconnect,
+  E2EE, init errors) were removed; real connection failures still surface via the
+  transport error handler.
+
 ### Removed
 - Removed the `adminUserId` concept and its "🔐 … is now the admin" notice. It
   was write-only state (set, persisted, loaded, but never read — admin DM

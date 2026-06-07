@@ -3,7 +3,6 @@ import {
   AutojoinRoomsMixin,
   LogService,
   MatrixClient,
-  RichConsoleLogger,
   RustSdkCryptoStorageProvider,
   RustSdkCryptoStoreType,
   SimpleFsStorageProvider,
@@ -20,6 +19,18 @@ import {
   stripBotMention,
   wasBotMentioned,
 } from "./matrix-utils.js";
+
+// matrix-bot-sdk logs to the console, which corrupts pi's interactive TUI (the
+// crypto/sync logs land mid-render, e.g. eating an incoming message). Silence it
+// entirely — real connection failures still throw from client.start() and are
+// surfaced via the transport error handler / connect() rejection.
+const SILENT_LOGGER: ILogger = {
+  info: () => {},
+  warn: () => {},
+  debug: () => {},
+  trace: () => {},
+  error: () => {},
+};
 
 /**
  * Matrix transport provider using matrix-bot-sdk
@@ -50,6 +61,9 @@ export class MatrixProvider implements ITransportProvider {
   async connect(): Promise<void> {
     if (this._isConnected) return;
 
+    // Silence the SDK before any client activity so it never writes to the TUI.
+    LogService.setLogger(SILENT_LOGGER);
+
     const { homeserverUrl, accessToken } = this.config;
 
     if (!homeserverUrl || !accessToken) {
@@ -76,9 +90,8 @@ export class MatrixProvider implements ITransportProvider {
           "matrix-bridge-crypto"
         );
         cryptoProvider = new RustSdkCryptoStorageProvider(cryptoStorePath, RustSdkCryptoStoreType.Sqlite);
-        console.log("[Matrix] E2EE crypto storage enabled (Rust/SQLite)");
-      } catch (err) {
-        console.warn("[Matrix] E2EE crypto not available, continuing without encryption:", (err as Error).message);
+      } catch {
+        // E2EE crypto unavailable — continue without encryption.
       }
     }
 
@@ -120,38 +133,13 @@ export class MatrixProvider implements ITransportProvider {
     });
 
     try {
-      // During initial sync the SDK replays historical events and tries to
-      // decrypt them. For E2EE rooms this produces two known error patterns:
-      //   1. "Decryption error" — old messages we don't have keys for
-      //   2. "M_NOT_FOUND"     — stale sync token references a purged event
-      // Our connectedAt filter skips these events anyway, so the errors are
-      // noise. A filtering logger suppresses only these specific patterns.
-      const defaultLogger = new RichConsoleLogger();
-      const syncFilterLogger: ILogger = {
-        info:  (mod, ...args) => defaultLogger.info(mod, ...args),
-        warn:  (mod, ...args) => defaultLogger.warn(mod, ...args),
-        debug: (mod, ...args) => defaultLogger.debug(mod, ...args),
-        trace: (mod, ...args) => defaultLogger.trace(mod, ...args),
-        error: (mod, ...args) => {
-          const msg = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
-          if (mod === "MatrixClientLite" && msg.includes("Decryption error")) return;
-          if (mod === "MatrixHttpClient" && msg.includes("M_NOT_FOUND")) return;
-          defaultLogger.error(mod, ...args);
-        },
-      };
-      LogService.setLogger(syncFilterLogger);
-
       await this.client.start();
-
-      // Restore default logging — real errors after sync should not be filtered
-      LogService.setLogger(defaultLogger);
     } catch (error) {
       // Clean up dangling state so connect() can be retried
       this.client = undefined;
       this.botUserId = undefined;
       this.joinedRooms.clear();
       this.roomMemberCount.clear();
-      console.error("[Matrix] Failed to connect:", error);
       throw error;
     }
 
@@ -168,8 +156,6 @@ export class MatrixProvider implements ITransportProvider {
     }));
     this.connectedAt = Date.now();
     this._isConnected = true;
-    const cryptoStatus = cryptoProvider ? "E2EE enabled" : "E2EE disabled";
-    console.log(`✅ Matrix connected as ${this.botUserId} (${rooms.length} rooms, ${cryptoStatus})`);
   }
 
   async disconnect(): Promise<void> {
@@ -182,7 +168,6 @@ export class MatrixProvider implements ITransportProvider {
     this.joinedRooms.clear();
     this.roomMemberCount.clear();
     this.connectedAt = 0;
-    console.log("[Matrix] Disconnected");
   }
 
   async sendMessage(chatId: string, text: string): Promise<string> {
