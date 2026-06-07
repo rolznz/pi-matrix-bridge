@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Forked and renamed to `pi-matrix-bridge`.** This is a Matrix-only fork of
+  [tintinweb/pi-messenger-bridge](https://github.com/tintinweb/pi-messenger-bridge) (MIT).
+- Removed the Telegram, WhatsApp, Slack, and Discord transports and their dependencies
+  (`node-telegram-bot-api`, `@whiskeysockets/baileys`, `@slack/bolt`, `discord.js`,
+  `qrcode-terminal`). Only the Matrix transport (`matrix-bot-sdk`) remains.
+
 ## [0.4.0] - 2026-05-09
 
 ### Added

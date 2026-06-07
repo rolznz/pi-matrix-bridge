@@ -2,7 +2,7 @@ import type { ExternalMessage } from "../types.js";
 
 /**
  * Transport provider interface
- * Adapts different messenger platforms (Telegram, WhatsApp, Slack, Discord)
+ * Adapts a messenger platform (currently Matrix) to a common message API.
  */
 export interface ITransportProvider {
   /** Transport type identifier */

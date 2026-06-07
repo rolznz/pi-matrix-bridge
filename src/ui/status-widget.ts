@@ -1,10 +1,7 @@
 import type { TransportStatus } from "../types.js";
 
 const TRANSPORT_ABBREV: Record<string, string> = {
-  telegram: "tg",
-  whatsapp: "wa",
-  slack: "slk",
-  discord: "dc",
+  matrix: "mx",
 };
 
 /**

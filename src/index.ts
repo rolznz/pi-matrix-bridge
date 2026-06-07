@@ -1,25 +1,18 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import { ChallengeAuth } from "./auth/challenge-auth.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { extractTextFromMessage, formatToolCalls, hasToolCalls, splitMessage } from "./formatting.js";
 import { acquireLock, releaseLock } from "./lock.js";
-import { DiscordProvider } from "./transports/discord.js";
 import { TransportManager } from "./transports/manager.js";
 import { MatrixProvider } from "./transports/matrix.js";
-import { SlackProvider } from "./transports/slack.js";
-import { TelegramProvider } from "./transports/telegram.js";
-import { WhatsAppProvider } from "./transports/whatsapp.js";
 import type { PendingRemoteChat, TransportStatus } from "./types.js";
 import { openMainMenu } from "./ui/main-menu.js";
 import { createStatusWidget } from "./ui/status-widget.js";
 
 /**
- * pi-remote-pilot extension
- * Bridges messenger apps (Telegram, WhatsApp, Slack, Discord) into pi
+ * pi-matrix-bridge extension
+ * Bridges Matrix into pi.
  */
 export default function (pi: ExtensionAPI): void {
   const transportManager = new TransportManager();
@@ -91,69 +84,12 @@ export default function (pi: ExtensionAPI): void {
       auth.loadFromConfig(config.auth);
     }
 
-    // Initialize transports in the background (non-blocking)
+    // Initialize the Matrix transport in the background (non-blocking)
     (async () => {
-      const transportPromises: Promise<void>[] = [];
-
-      if (config.telegram?.token) {
-        transportPromises.push(
-          Promise.resolve().then(() => {
-            const telegramProvider = new TelegramProvider(config.telegram!.token, auth);
-            transportManager.addTransport(telegramProvider);
-          })
-        );
-      }
-
-      if (config.whatsapp) {
-        const whatsappAuthPath = config.whatsapp.authPath || path.join(
-          os.homedir(),
-          ".pi",
-          "msg-bridge-whatsapp-auth"
-        );
-
-        const credsPath = path.join(whatsappAuthPath, "creds.json");
-        if (fs.existsSync(credsPath)) {
-          transportPromises.push(
-            Promise.resolve().then(() => {
-              const whatsappConfig = { ...config.whatsapp!, debug: config.debug };
-              const whatsappProvider = new WhatsAppProvider(whatsappConfig, auth);
-              transportManager.addTransport(whatsappProvider);
-            })
-          );
-        } else {
-          delete config.whatsapp;
-          saveConfig(config);
-        }
-      }
-
-      if (config.slack?.botToken && config.slack?.appToken) {
-        transportPromises.push(
-          Promise.resolve().then(() => {
-            const slackProvider = new SlackProvider(config.slack!, auth);
-            transportManager.addTransport(slackProvider);
-          })
-        );
-      }
-
-      if (config.discord?.token) {
-        transportPromises.push(
-          Promise.resolve().then(() => {
-            const discordProvider = new DiscordProvider(config.discord!, auth);
-            transportManager.addTransport(discordProvider);
-          })
-        );
-      }
-
       if (config.matrix?.homeserverUrl && config.matrix?.accessToken) {
-        transportPromises.push(
-          Promise.resolve().then(() => {
-            const matrixProvider = new MatrixProvider(config.matrix!, auth);
-            transportManager.addTransport(matrixProvider);
-          })
-        );
+        const matrixProvider = new MatrixProvider(config.matrix, auth);
+        transportManager.addTransport(matrixProvider);
       }
-
-      await Promise.all(transportPromises);
 
       // Auto-connect if configured
       const transports = transportManager.getAllTransports();
@@ -236,7 +172,7 @@ export default function (pi: ExtensionAPI): void {
 
       const fullText = parts.join("\n\n");
 
-      // Split long messages for Telegram's 4096 char limit
+      // Split long messages into safe chunks
       const chunks = splitMessage(fullText, 4000);
       for (const chunk of chunks) {
         await transportManager.sendMessage(
@@ -295,12 +231,8 @@ export default function (pi: ExtensionAPI): void {
           "/msg-bridge                   Open interactive menu",
           "/msg-bridge help              Show this help",
           "/msg-bridge status            Show connection and user status",
-          "/msg-bridge connect           Connect to all transports",
-          "/msg-bridge disconnect        Disconnect from all transports",
-          "/msg-bridge configure telegram <token>",
-          "                              Configure Telegram bot",
-          "/msg-bridge configure whatsapp",
-          "                              Configure WhatsApp (scan QR)",
+          "/msg-bridge connect           Connect to Matrix",
+          "/msg-bridge disconnect        Disconnect from Matrix",
           "/msg-bridge configure matrix <homeserver-url> <access-token>",
           "                              Configure Matrix (Element X, etc)",
           "/msg-bridge widget            Toggle status widget on/off",
@@ -355,105 +287,6 @@ export default function (pi: ExtensionAPI): void {
         const config = loadConfig();
 
         switch (platform.toLowerCase()) {
-          case "telegram": {
-            if (!token) {
-              context.ui.notify("Usage: /msg-bridge configure telegram <bot-token>", "error");
-              return;
-            }
-            config.telegram = { token };
-            saveConfig(config);
-            const telegramProvider = new TelegramProvider(token, auth);
-            transportManager.addTransport(telegramProvider);
-            if (acquireLock()) {
-              try {
-                await telegramProvider.connect();
-                context.ui.notify("✅ Telegram configured and connected", "info");
-              } catch (_err) {
-                releaseLock();
-                context.ui.notify("✅ Telegram configured (run /msg-bridge connect to activate)", "info");
-              }
-            } else {
-              context.ui.notify("✅ Telegram configured (another instance is connected — run /msg-bridge connect later)", "info");
-            }
-            updateWidget();
-            break;
-          }
-
-          case "whatsapp": {
-            config.whatsapp = token ? { authPath: token } : {};
-            saveConfig(config);
-            const whatsappConfig = { ...config.whatsapp, debug: config.debug };
-            const whatsappProvider = new WhatsAppProvider(whatsappConfig, auth);
-            transportManager.addTransport(whatsappProvider);
-            if (acquireLock()) {
-              try {
-                await whatsappProvider.connect(true);
-                context.ui.notify("✅ WhatsApp configured and connecting (scan QR code in terminal)...", "info");
-              } catch (err) {
-                releaseLock();
-                context.ui.notify(`⚠️ WhatsApp setup error: ${(err as Error).message}`, "error");
-              }
-            } else {
-              context.ui.notify("✅ WhatsApp configured (another instance is connected — run /msg-bridge connect later)", "info");
-            }
-            updateWidget();
-            break;
-          }
-
-          case "slack": {
-            const parts2 = token.split(/\s+/);
-            const botToken = parts2[0];
-            const appToken = parts2[1];
-
-            if (!botToken || !appToken) {
-              context.ui.notify("Usage: /msg-bridge configure slack <bot-token> <app-token>", "error");
-              return;
-            }
-
-            config.slack = { botToken, appToken };
-            saveConfig(config);
-            const slackProvider = new SlackProvider(config.slack, auth);
-            transportManager.addTransport(slackProvider);
-            if (acquireLock()) {
-              try {
-                await slackProvider.connect();
-                context.ui.notify("✅ Slack configured and connected", "info");
-              } catch (err) {
-                releaseLock();
-                context.ui.notify(`⚠️ Slack setup error: ${(err as Error).message}`, "error");
-              }
-            } else {
-              context.ui.notify("✅ Slack configured (another instance is connected — run /msg-bridge connect later)", "info");
-            }
-            updateWidget();
-            break;
-          }
-
-          case "discord": {
-            if (!token) {
-              context.ui.notify("Usage: /msg-bridge configure discord <bot-token>", "error");
-              return;
-            }
-
-            config.discord = { token };
-            saveConfig(config);
-            const discordProvider = new DiscordProvider(config.discord, auth);
-            transportManager.addTransport(discordProvider);
-            if (acquireLock()) {
-              try {
-                await discordProvider.connect();
-                context.ui.notify("✅ Discord configured and connected", "info");
-              } catch (err) {
-                releaseLock();
-                context.ui.notify(`⚠️ Discord setup error: ${(err as Error).message}`, "error");
-              }
-            } else {
-              context.ui.notify("✅ Discord configured (another instance is connected — run /msg-bridge connect later)", "info");
-            }
-            updateWidget();
-            break;
-          }
-
           case "matrix": {
             const matrixParts = token.split(/\s+/);
             const homeserverUrl = matrixParts[0];

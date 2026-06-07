@@ -9,11 +9,8 @@ describe('config', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'msg-bridge-config-'));
-    delete process.env.PI_TELEGRAM_TOKEN;
-    delete process.env.PI_WHATSAPP_AUTH_PATH;
-    delete process.env.PI_SLACK_BOT_TOKEN;
-    delete process.env.PI_SLACK_APP_TOKEN;
-    delete process.env.PI_DISCORD_TOKEN;
+    delete process.env.PI_MATRIX_HOMESERVER;
+    delete process.env.PI_MATRIX_ACCESS_TOKEN;
     vi.resetModules();
   });
 
@@ -38,10 +35,10 @@ describe('config', () => {
   it('saves and loads config roundtrip', async () => {
     const { loadConfig, saveConfig } = await importConfig();
 
-    saveConfig({ telegram: { token: 'test-token' }, autoConnect: true, debug: false });
+    saveConfig({ matrix: { homeserverUrl: 'https://matrix.org', accessToken: 'test-token' }, autoConnect: true, debug: false });
     const loaded = loadConfig();
 
-    expect(loaded.telegram?.token).toBe('test-token');
+    expect(loaded.matrix?.accessToken).toBe('test-token');
     expect(loaded.autoConnect).toBe(true);
     expect(loaded.debug).toBe(false);
   });
@@ -65,30 +62,25 @@ describe('config', () => {
   it('env vars override file values for the same transport', async () => {
     const { loadConfig, saveConfig } = await importConfig();
 
-    saveConfig({ telegram: { token: 'file-token' }, autoConnect: true });
-    process.env.PI_TELEGRAM_TOKEN = 'env-token';
+    saveConfig({ matrix: { homeserverUrl: 'https://matrix.org', accessToken: 'file-token' }, autoConnect: true });
+    process.env.PI_MATRIX_HOMESERVER = 'https://matrix.org';
+    process.env.PI_MATRIX_ACCESS_TOKEN = 'env-token';
 
     const loaded = loadConfig();
-    expect(loaded.telegram?.token).toBe('env-token');
+    expect(loaded.matrix?.accessToken).toBe('env-token');
     // Non-overridden fields survive
     expect(loaded.autoConnect).toBe(true);
   });
 
-  it('loads all transport env vars', async () => {
-    process.env.PI_TELEGRAM_TOKEN = 'tg-token';
-    process.env.PI_WHATSAPP_AUTH_PATH = '/wa/auth';
-    process.env.PI_SLACK_BOT_TOKEN = 'xoxb-test';
-    process.env.PI_SLACK_APP_TOKEN = 'xapp-test';
-    process.env.PI_DISCORD_TOKEN = 'dc-token';
+  it('loads Matrix env vars', async () => {
+    process.env.PI_MATRIX_HOMESERVER = 'https://matrix.org';
+    process.env.PI_MATRIX_ACCESS_TOKEN = 'mx-token';
 
     const { loadConfig } = await importConfig();
     const config = loadConfig();
 
-    expect(config.telegram?.token).toBe('tg-token');
-    expect(config.whatsapp?.authPath).toBe('/wa/auth');
-    expect(config.slack?.botToken).toBe('xoxb-test');
-    expect(config.slack?.appToken).toBe('xapp-test');
-    expect(config.discord?.token).toBe('dc-token');
+    expect(config.matrix?.homeserverUrl).toBe('https://matrix.org');
+    expect(config.matrix?.accessToken).toBe('mx-token');
   });
 
   it('handles corrupted config file gracefully', async () => {
@@ -107,19 +99,20 @@ describe('config', () => {
     mkdirSync(piDir, { recursive: true });
     writeFileSync(join(piDir, 'msg-bridge.json'), 'not json');
 
-    process.env.PI_TELEGRAM_TOKEN = 'env-token';
+    process.env.PI_MATRIX_HOMESERVER = 'https://matrix.org';
+    process.env.PI_MATRIX_ACCESS_TOKEN = 'env-token';
 
     const { loadConfig } = await importConfig();
     const config = loadConfig();
-    expect(config.telegram?.token).toBe('env-token');
+    expect(config.matrix?.accessToken).toBe('env-token');
   });
 
-  it('requires both Slack tokens for slack config', async () => {
-    // Only bot token — should not set slack
-    process.env.PI_SLACK_BOT_TOKEN = 'xoxb-test';
+  it('requires both Matrix env vars for matrix config', async () => {
+    // Only homeserver — should not set matrix
+    process.env.PI_MATRIX_HOMESERVER = 'https://matrix.org';
 
     const { loadConfig } = await importConfig();
-    expect(loadConfig().slack).toBeUndefined();
+    expect(loadConfig().matrix).toBeUndefined();
   });
 
   it('saves and loads hideToolCalls config', async () => {

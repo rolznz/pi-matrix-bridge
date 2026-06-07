@@ -4,7 +4,7 @@
 export interface ExternalMessage {
   /** Unique chat/channel identifier */
   chatId: string;
-  /** Transport type (telegram, whatsapp, etc) */
+  /** Transport type (matrix) */
   transport: string;
   /** Message content/text */
   content: string;
@@ -26,19 +26,6 @@ export interface ExternalMessage {
  * Configuration for msg-bridge extension
  */
 export interface MsgBridgeConfig {
-  telegram?: {
-    token: string;
-  };
-  whatsapp?: {
-    authPath?: string;
-  };
-  slack?: {
-    botToken: string;
-    appToken: string;
-  };
-  discord?: {
-    token: string;
-  };
   matrix?: {
     homeserverUrl: string;
     accessToken: string;

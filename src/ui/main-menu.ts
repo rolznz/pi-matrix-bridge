@@ -7,12 +7,8 @@
 import type { ChallengeAuth } from "../auth/challenge-auth.js";
 import { loadConfig, saveConfig } from "../config.js";
 import { acquireLock, releaseLock } from "../lock.js";
-import { DiscordProvider } from "../transports/discord.js";
 import type { TransportManager } from "../transports/manager.js";
 import { MatrixProvider } from "../transports/matrix.js";
-import { SlackProvider } from "../transports/slack.js";
-import { TelegramProvider } from "../transports/telegram.js";
-import { WhatsAppProvider } from "../transports/whatsapp.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -91,123 +87,26 @@ async function doDisconnect(mctx: MenuContext): Promise<void> {
 }
 
 async function doConfigure(mctx: MenuContext): Promise<void> {
-  const platform = await mctx.ui.select("Configure transport", [
-    "Telegram",
-    "WhatsApp",
-    "Slack",
-    "Discord",
-    "Matrix",
-  ]);
-  if (!platform) return;
-
   const config = loadConfig();
 
-  switch (platform) {
-    case "Telegram": {
-      const token = await mctx.ui.input("Telegram bot token");
-      if (!token) return;
-      config.telegram = { token };
-      saveConfig(config);
-      const provider = new TelegramProvider(token, mctx.auth);
-      mctx.transportManager.addTransport(provider);
-      if (acquireLock()) {
-        try {
-          await provider.connect();
-          mctx.ui.notify("✅ Telegram configured and connected", "info");
-        } catch (_err) {
-          releaseLock();
-          mctx.ui.notify("✅ Telegram configured (run /msg-bridge connect to activate)", "info");
-        }
-      } else {
-        mctx.ui.notify("✅ Telegram configured (another instance is connected — run /msg-bridge connect later)", "info");
-      }
-      break;
+  const homeserverUrl = await mctx.ui.input("Matrix homeserver URL (e.g. https://matrix.org)");
+  if (!homeserverUrl) return;
+  const accessToken = await mctx.ui.input("Matrix access token");
+  if (!accessToken) return;
+  config.matrix = { homeserverUrl, accessToken };
+  saveConfig(config);
+  const provider = new MatrixProvider(config.matrix, mctx.auth);
+  mctx.transportManager.addTransport(provider);
+  if (acquireLock()) {
+    try {
+      await provider.connect();
+      mctx.ui.notify("✅ Matrix configured and connected", "info");
+    } catch (err) {
+      releaseLock();
+      mctx.ui.notify(`⚠️ Matrix setup error: ${(err as Error).message}`, "error");
     }
-    case "WhatsApp": {
-      const authPath = await mctx.ui.input("Auth path (enter for default, esc to cancel)");
-      if (authPath === undefined) return; // cancelled
-      config.whatsapp = authPath ? { authPath } : {};
-      saveConfig(config);
-      const whatsappConfig = { ...config.whatsapp, debug: config.debug };
-      const provider = new WhatsAppProvider(whatsappConfig, mctx.auth);
-      mctx.transportManager.addTransport(provider);
-      if (acquireLock()) {
-        try {
-          await provider.connect(true);
-          mctx.ui.notify("✅ WhatsApp configured and connecting (scan QR code in terminal)...", "info");
-        } catch (err) {
-          releaseLock();
-          mctx.ui.notify(`⚠️ WhatsApp setup error: ${(err as Error).message}`, "error");
-        }
-      } else {
-        mctx.ui.notify("✅ WhatsApp configured (another instance is connected — run /msg-bridge connect later)", "info");
-      }
-      break;
-    }
-    case "Slack": {
-      const botToken = await mctx.ui.input("Slack bot token (xoxb-...)");
-      if (!botToken) return;
-      const appToken = await mctx.ui.input("Slack app token (xapp-...)");
-      if (!appToken) return;
-      config.slack = { botToken, appToken };
-      saveConfig(config);
-      const provider = new SlackProvider(config.slack, mctx.auth);
-      mctx.transportManager.addTransport(provider);
-      if (acquireLock()) {
-        try {
-          await provider.connect();
-          mctx.ui.notify("✅ Slack configured and connected", "info");
-        } catch (err) {
-          releaseLock();
-          mctx.ui.notify(`⚠️ Slack setup error: ${(err as Error).message}`, "error");
-        }
-      } else {
-        mctx.ui.notify("✅ Slack configured (another instance is connected — run /msg-bridge connect later)", "info");
-      }
-      break;
-    }
-    case "Discord": {
-      const token = await mctx.ui.input("Discord bot token");
-      if (!token) return;
-      config.discord = { token };
-      saveConfig(config);
-      const provider = new DiscordProvider(config.discord, mctx.auth);
-      mctx.transportManager.addTransport(provider);
-      if (acquireLock()) {
-        try {
-          await provider.connect();
-          mctx.ui.notify("✅ Discord configured and connected", "info");
-        } catch (err) {
-          releaseLock();
-          mctx.ui.notify(`⚠️ Discord setup error: ${(err as Error).message}`, "error");
-        }
-      } else {
-        mctx.ui.notify("✅ Discord configured (another instance is connected — run /msg-bridge connect later)", "info");
-      }
-      break;
-    }
-    case "Matrix": {
-      const homeserverUrl = await mctx.ui.input("Matrix homeserver URL (e.g. https://matrix.org)");
-      if (!homeserverUrl) return;
-      const accessToken = await mctx.ui.input("Matrix access token");
-      if (!accessToken) return;
-      config.matrix = { homeserverUrl, accessToken };
-      saveConfig(config);
-      const provider = new MatrixProvider(config.matrix, mctx.auth);
-      mctx.transportManager.addTransport(provider);
-      if (acquireLock()) {
-        try {
-          await provider.connect();
-          mctx.ui.notify("✅ Matrix configured and connected", "info");
-        } catch (err) {
-          releaseLock();
-          mctx.ui.notify(`⚠️ Matrix setup error: ${(err as Error).message}`, "error");
-        }
-      } else {
-        mctx.ui.notify("✅ Matrix configured (another instance is connected — run /msg-bridge connect later)", "info");
-      }
-      break;
-    }
+  } else {
+    mctx.ui.notify("✅ Matrix configured (another instance is connected — run /msg-bridge connect later)", "info");
   }
   mctx.updateWidget();
 }

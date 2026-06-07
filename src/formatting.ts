@@ -33,10 +33,8 @@ export function formatToolCalls(message: AssistantMessage): string {
         })
         .join(", ");
 
-      // Wrap the tool name in backticks so messengers render it as inline
-      // code — preserves snake_case readability across Telegram (which would
-      // otherwise have to backslash-escape underscores), Discord, Slack,
-      // Matrix, and WhatsApp uniformly.
+      // Wrap the tool name in backticks so Matrix renders it as inline code,
+      // preserving snake_case readability.
       return argPairs ? `🔧 \`${name}\` (${argPairs})` : `🔧 \`${name}\``;
     })
     .join("\n");

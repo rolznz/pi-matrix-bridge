@@ -283,7 +283,7 @@ export class ChallengeAuth {
           return true;
         }
         const revokeId = parts[1];
-        // Support both "telegram:123" and "123" (searches for any match)
+        // Support both "matrix:@alice:hs.org" and a bare id (searches for any match)
         let revoked = false;
         if (revokeId.includes(':')) {
           // Full namespaced ID
